@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DateSelectArg,
+  DatesSetArg,
   EventChangeArg,
   EventClickArg,
   EventContentArg,
@@ -66,7 +67,7 @@ export default function CalendarView() {
   const [filters, setFilters] = useState<CategoryValue[]>([]);
   const [search, setSearch] = useState("");
   const [timeFilter, setTimeFilter] = useState<string>("");
-
+  const [calendarTitle, setCalendarTitle] = useState("");
   const [currentView, setCurrentView] = useState("dayGridMonth");
   const [isToday, setIsToday] = useState(true);
 
@@ -261,6 +262,10 @@ export default function CalendarView() {
     setTimeFilter("");
   };
 
+  const handleDatesSet = (arg: DatesSetArg) => {
+    setCalendarTitle(arg.view.title);
+  };
+
   useEffect(() => {
     updateTodayState();
   }, []);
@@ -268,12 +273,12 @@ export default function CalendarView() {
   return (
     <div className="p-4 space-y-4">
       {/* Filter & Search Panel */}
-      <div className="flex flex-wrap gap-4 items-center">
+      <div className="flex flex-wrap gap-4 items-center justify-center md:justify-end">
         <Input
           placeholder="Search tasks..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
+          className="md:max-w-xs max-w-full"
         />
 
         {categories.map((cat) => (
@@ -308,20 +313,29 @@ export default function CalendarView() {
         <Button onClick={resetFilters}>Reset filters</Button>
       </div>
 
-      <div className="flex justify-between">
-        <h1 className="text-2xl">{calendarRef.current?.getApi().view.title}</h1>
+      <div className="flex flex-col-reverse md:flex-row justify-between gap-4">
+        {/* Title */}
+        <h1 className="text-2xl font-bold text-center md:text-left">
+          {calendarTitle}
+        </h1>
+
         {/* Custom Toolbar */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <Button onClick={goToPrev} variant="outline">
-            Prev
-          </Button>
-          <Button onClick={goToToday} variant={isToday ? "default" : "outline"}>
-            Today
-          </Button>
-          <Button onClick={goToNext} variant="outline">
-            Next
-          </Button>
-          <div className="ml-4 flex gap-2">
+        <div className="flex flex-col md:flex-row gap-2 items-center">
+          <div className="flex gap-2">
+            <Button onClick={goToPrev} variant="outline">
+              Prev
+            </Button>
+            <Button
+              onClick={goToToday}
+              variant={isToday ? "default" : "outline"}
+            >
+              Today
+            </Button>
+            <Button onClick={goToNext} variant="outline">
+              Next
+            </Button>
+          </div>
+          <div className="md:ml-4 flex gap-2 mt-2 md:mt-0">
             <Button
               onClick={() => changeView("dayGridMonth")}
               variant={currentView === "dayGridMonth" ? "default" : "outline"}
@@ -364,6 +378,7 @@ export default function CalendarView() {
         datesSet={(arg) => {
           setCurrentView(arg.view.type);
           updateTodayState();
+          handleDatesSet(arg);
         }}
         dayHeaderClassNames={"bg-primary text-primary-foreground"}
       />
