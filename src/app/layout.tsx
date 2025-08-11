@@ -16,6 +16,23 @@ export const metadata: Metadata = {
   title: "Daymatrix",
   description:
     "Daymatrix – A React + TypeScript app to create, move, resize, filter, and search tasks in a clean monthly calendar view with drag-and-drop.",
+  openGraph: {
+    title: "Daymatrix",
+    description:
+      "Daymatrix – A React + TypeScript app to create, move, resize, filter, and search tasks in a clean monthly calendar view with drag-and-drop.",
+    url: "https://daymatrix.vercel.app",
+    siteName: "Daymatrix",
+    images: [
+      {
+        url: "https://daymatrix.vercel.app/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Daymatrix Calendar Preview",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
