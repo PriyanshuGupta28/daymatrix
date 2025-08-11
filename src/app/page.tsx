@@ -1,9 +1,9 @@
-import CalendarView from "@/components/full-calendar/calendar-view";
+import LandingPage from "@/components/lander/lander";
 
 export default function Home() {
   return (
     <>
-      <CalendarView />
+      <LandingPage />
     </>
   );
 }
