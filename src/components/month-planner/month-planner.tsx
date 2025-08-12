@@ -703,6 +703,24 @@ export default function MonthPlanner() {
                 → {days[Math.max(dragStartIdx!, dragEndIdx!)].iso}
               </p>
             )}
+            {editTaskId && (
+              <p className="text-sm text-muted-foreground">
+                Task duration:{" "}
+                {
+                  days.find(
+                    (day) =>
+                      day.iso === tasks.find((t) => t.id === editTaskId)?.start
+                  )?.iso
+                }{" "}
+                →{" "}
+                {
+                  days.find(
+                    (day) =>
+                      day.iso === tasks.find((t) => t.id === editTaskId)?.end
+                  )?.iso
+                }
+              </p>
+            )}
           </div>
           <DialogFooter>
             {editTaskId && (
