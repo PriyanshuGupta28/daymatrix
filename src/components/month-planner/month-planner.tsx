@@ -2,15 +2,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
+  addMinutes,
+  differenceInDays,
   differenceInMinutes,
   endOfDay,
   format,
   isAfter,
   isBefore,
+  isSameDay,
   isToday,
   isWithinInterval,
-  max,
-  min,
   parseISO,
   startOfDay,
 } from "date-fns";
@@ -43,6 +44,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import TodoBoard from "./TodoBoard";
 
 interface FiltersState {
   categories: Set<TaskCategory>;
@@ -109,6 +111,8 @@ export default function MonthPlanner() {
   const [draftCategory, setDraftCategory] = useState<TaskCategory>("To Do");
   const [draftHours, setDraftHours] = useState<number>(24);
 
+  const refs = useRef<Record<string, HTMLDivElement | null>>(null);
+
   const [filters, setFilters] = useState<FiltersState>({
     categories: new Set<TaskCategory>(),
     timeWindowWeeks: 0,
@@ -127,7 +131,7 @@ export default function MonthPlanner() {
     return tasks.filter((t) => {
       if (filters.categories.size && !filters.categories.has(t.category))
         return false;
-      if (term && !t.name.toLowerCase().includes(term)) return false;
+      if (term && !t.name.toLowerCase()[0].includes(term)) return false;
       if (endLimit) {
         const tStart = parseISO(t.start);
         const tEnd = parseISO(t.end);
@@ -153,7 +157,7 @@ export default function MonthPlanner() {
   const resetDraft = () => {
     setDraftName("");
     setDraftCategory("To Do");
-    setDraftHours(8);
+    setDraftHours(24);
   };
 
   const startDragCreate = (idx: number) => (e: React.PointerEvent) => {
@@ -381,20 +385,6 @@ export default function MonthPlanner() {
     return idx >= a && idx <= b;
   };
 
-  const tasksByDay = useMemo(() => {
-    const map: Record<string, TaskItem[]> = {};
-    for (const t of filteredTasks) {
-      let cur = parseISO(t.start);
-      const last = parseISO(t.end);
-      while (!isAfter(cur, last)) {
-        const k = iso(cur);
-        (map[k] ||= []).push(t);
-        cur = addDays(cur, 1);
-      }
-    }
-    return map;
-  }, [filteredTasks]);
-
   const toggleCategory = (c: TaskCategory) => {
     setFilters((f) => {
       const next = new Set(f.categories);
@@ -408,6 +398,136 @@ export default function MonthPlanner() {
     setFilters({ categories: new Set(), timeWindowWeeks: 0, search: "" });
   };
 
+  // Map of taskId -> laneIndex (same for all days it spans)
+  const taskLaneMap: Record<string, number> = {};
+
+  // Sort tasks across all days by start time, then longest first
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    const daysA =
+      (new Date(a.end).getTime() - new Date(a.start).getTime()) /
+      (1000 * 60 * 60 * 24);
+    const daysB =
+      (new Date(b.end).getTime() - new Date(b.start).getTime()) /
+      (1000 * 60 * 60 * 24);
+
+    // Sort longest first
+    if (daysB !== daysA) return daysB - daysA;
+
+    // If same duration, sort by start time
+    return new Date(a.start).getTime() - new Date(b.start).getTime();
+  });
+
+  // Lane end times (for overlap detection)
+  const laneEndTimes: Date[] = [];
+
+  sortedTasks.forEach((task) => {
+    let laneIndex = 0;
+    while (
+      laneIndex < laneEndTimes.length &&
+      new Date(task.start) < laneEndTimes[laneIndex]
+    ) {
+      laneIndex++;
+    }
+
+    // Assign lane index to this task
+    taskLaneMap[task.id] = laneIndex;
+
+    // Update or add lane end time
+    if (laneIndex === laneEndTimes.length) {
+      laneEndTimes.push(new Date(task.end));
+    } else {
+      laneEndTimes[laneIndex] = new Date(task.end);
+    }
+  });
+  // Utility: checks if two tasks overlap in any day
+  // Process tasks with global lane assignment
+  const processedTasks = useMemo(() => {
+    // Sort tasks by start date and duration
+    const sortedTasks = [...filteredTasks].sort((a, b) => {
+      const durA = differenceInDays(parseISO(a.end), parseISO(a.start));
+      const durB = differenceInDays(parseISO(b.end), parseISO(b.start));
+      if (durB !== durA) return durB - durA;
+      return parseISO(a.start).getTime() - parseISO(b.start).getTime();
+    });
+
+    // Global lanes for consistent positioning
+    const globalLanes = [];
+    const taskLaneMap = new Map();
+
+    sortedTasks.forEach((task) => {
+      const taskStart = parseISO(task.start);
+      const taskEnd = parseISO(task.end);
+
+      // Find first available lane
+      let laneIndex = 0;
+      let foundLane = false;
+
+      while (laneIndex < globalLanes.length) {
+        const canUseLane = !globalLanes[laneIndex].some((existing) => {
+          const existingStart = parseISO(existing.start);
+          const existingEnd = parseISO(existing.end);
+
+          // Check for overlap
+          return !(taskEnd <= existingStart || taskStart >= existingEnd);
+        });
+
+        if (canUseLane) {
+          foundLane = true;
+          break;
+        }
+        laneIndex++;
+      }
+
+      // Create new lane if needed
+      if (!foundLane) {
+        globalLanes.push([]);
+      }
+
+      // Add task to lane
+      globalLanes[laneIndex].push(task);
+      taskLaneMap.set(task.id, laneIndex);
+    });
+
+    return { taskLaneMap, totalLanes: globalLanes.length };
+  }, [filteredTasks]);
+
+  // Group tasks by day
+  const tasksByDay = useMemo(() => {
+    const grouped = {};
+
+    filteredTasks.forEach((task) => {
+      const taskStart = parseISO(task.start);
+      const taskEnd = parseISO(task.end);
+
+      days.forEach((day) => {
+        if (
+          (isSameDay(day.date, taskStart) || isAfter(day.date, taskStart)) &&
+          (isSameDay(day.date, taskEnd) || isBefore(day.date, taskEnd))
+        ) {
+          if (!grouped[day.iso]) {
+            grouped[day.iso] = [];
+          }
+          grouped[day.iso].push(task);
+        }
+      });
+    });
+
+    return grouped;
+  }, [filteredTasks, days]);
+  const getTaskColor = (category) => {
+    switch (category) {
+      case "Completed":
+        return "bg-green-500/50 border-green-500";
+      case "Review":
+        return "bg-purple-500/50 border-purple-500";
+      case "In Progress":
+        return "bg-yellow-500/50 border-purple-500";
+      case "Test":
+        return "bg-green-500/50 border-green-500";
+      default:
+        return "bg-blue-500/50 border-blue-500";
+    }
+  };
   return (
     <div className="w-full">
       <header className="mb-4">
@@ -418,6 +538,7 @@ export default function MonthPlanner() {
           Drag to create, move to reschedule, stretch to resize.
         </p>
       </header>
+      <TodoBoard setTasks={setTasks} tasks={tasks} />
 
       <section className="mb-4 flex flex-wrap items-center gap-2">
         <Button variant="secondary" onClick={goToday}>
@@ -456,123 +577,114 @@ export default function MonthPlanner() {
 
           <div
             ref={containerRef}
-            className="grid grid-cols-7 gap-2 select-none"
+            className="grid grid-cols-7 select-none gap-0 border-l border-t border-gray-300"
             onPointerMove={onMoveCreate}
             onPointerUp={endDragCreate}
           >
             {days.map((d, idx) => {
               const dayTasks = tasksByDay[d.iso] || [];
+              const { taskLaneMap, totalLanes } = processedTasks;
+
+              // Calculate min height based on total lanes
+              const minHeight = Math.max(110, 50 + totalLanes * 35);
+
               return (
                 <div
-                  key={d.iso + idx}
+                  key={d.iso}
                   data-cell-index={idx}
                   onPointerDown={startDragCreate(idx)}
                   className={cn(
-                    `rounded-md border p-1 relative max-h-[150px] min-h-[110px] overflow-y-auto ${
-                      d.inCurrentMonth ? "bg-card" : "bg-muted/40"
-                    } ${isIdxInSelection(idx) ? "ring-2 ring-primary" : ""}`,
-                    isToday(d.date) && "bg-primary/10 text-primary-foreground",
-                    "hover:bg-blue-300/10 hover:text-primary-foreground"
+                    "border-r border-b border-gray-300 relative",
+                    d.inCurrentMonth ? "bg-white" : "bg-gray-100",
+                    isIdxInSelection(idx) ? "ring-2 ring-blue-500" : "",
+                    isToday(d.date) && "bg-blue-50",
+                    "hover:bg-blue-50 transition-colors"
                   )}
+                  style={{ minHeight: `${minHeight}px` }}
                 >
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{format(d.date, "d")}</span>
-                    <span className="capitalize">{format(d.date, "MMM")}</span>
+                  {/* Day header */}
+                  <div className="flex items-center justify-between text-xs text-gray-600 p-2 border-b border-gray-200">
+                    <span className="font-semibold text-base">
+                      {format(d.date, "d")}
+                    </span>
+                    <span className="capitalize text-gray-500">
+                      {format(d.date, "MMM")}
+                    </span>
                   </div>
 
-                  {/* Container for 24-hour background + tasks with scroll */}
-                  <div className="mt-1 flex flex-col gap-[1px] max-h-[200px] overflow-y-auto relative">
-                    {/* Tasks overlays */}
-                    <div
-                      className="relative z-10 grid gap-[1px]"
-                      //   style={{
-                      //     gridTemplateRows: "repeat(24, minmax(0, 1fr))",
-                      //   }}
-                    >
-                      {dayTasks.map((t) => {
-                        const isStart = t.start === d.iso;
-                        const isEnd = t.end === d.iso;
-                        return (
+                  {/* Tasks container */}
+                  <div
+                    className="relative p-1"
+                    style={{ minHeight: `${totalLanes * 35 + 10}px` }}
+                  >
+                    {dayTasks.map((task) => {
+                      const isStart = isSameDay(parseISO(task.start), d.date);
+                      const isEnd = isSameDay(parseISO(task.end), d.date);
+                      const laneIndex = taskLaneMap.get(task.id);
+
+                      return (
+                        <div
+                          key={`${task.id}-${d.iso}`}
+                          className="absolute"
+                          style={{
+                            top: `${laneIndex * 35 + 5}px`,
+                            left: isStart ? "4px" : "0px",
+                            right: isEnd ? "4px" : "0px",
+                            height: "30px",
+                            zIndex: 10 + laneIndex,
+                          }}
+                        >
                           <div
-                            key={t.id}
-                            onPointerDown={startDragTask(t, idx)}
+                            onPointerDown={startDragTask(task, idx)}
+                            ref={(el) => {
+                              if (el && refs.current) {
+                                refs.current[`${task.id}-${d.iso}`] = el;
+                              }
+                            }}
                             className={cn(
-                              `relative group overflow-hidden border px-2 py-1 text-xs cursor-grab active:cursor-grabbing bg-accent text-accent-foreground ${
-                                isStart ? "rounded-l-md" : ""
-                              } ${isEnd ? "rounded-r-md" : ""}`,
-                              t.category === "Completed"
-                                ? "bg-green-500/10"
-                                : t.category === "Review"
-                                ? "bg-purple-500/10"
-                                : t.category === "In Progress"
-                                ? "bg-yellow-500/10"
-                                : "bg-blue-500/10"
+                              "w-full h-full group overflow-hidden border-2 px-2 py-1 text-xs cursor-grab active:cursor-grabbing",
+                              getTaskColor(task.category),
+                              isStart ? "rounded-l-md" : "border-l-0 ml-0",
+                              isEnd ? "rounded-r-md" : "border-r-0 mr-0",
+                              "hover:z-20 hover:shadow-lg transition-all"
                             )}
-                            // style={{
-                            //   gridRow: `span ${Math.max(
-                            //     1,
-                            //     Math.min(24, t.dailyHours)
-                            //   )} / span ${Math.max(
-                            //     1,
-                            //     Math.min(24, t.dailyHours)
-                            //   )}`,
-                            // }}
-                            aria-label={`${t.name} • ${t.category}`}
-                            title={`${t.name} • ${t.category} • ${t.dailyHours}h/day`}
-                            data-task-id={t.id}
-                            onClick={() => startEdit(t)}
+                            title={`${task.name} • ${task.category} • ${task.dailyHours}h/day`}
+                            onClick={() => startEdit(task)}
                           >
-                            {/* Task content and resize handles */}
-                            <div className="flex flex-col items-start justify-between">
-                              <span className="truncate">{t.name}</span>
-                              <span>
-                                {format(parseISO(t.start), "dd MMM")} -{" "}
-                                {format(parseISO(t.end), "dd MMM")}
-                              </span>
-                              <span className="ml-2 rounded bg-secondary/60 px-1 text-[10px] whitespace-nowrap">
-                                {t.category}
-                              </span>
+                            <div className="flex items-center h-full">
+                              {isStart ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold truncate text-gray-800">
+                                    {task.name}
+                                  </span>
+                                  <span className="text-[10px] bg-white/80 px-1 rounded whitespace-nowrap">
+                                    {task.category}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="opacity-80 truncate text-[11px] text-gray-700 hidden">
+                                  {task.name} (cont.)
+                                </span>
+                              )}
                             </div>
+
+                            {/* Resize handles */}
                             {isStart && (
                               <div
-                                onPointerDown={startResize(t.id, "left")}
-                                className={cn(
-                                  "absolute left-0 top-0 h-full w-1 bg-primary/70 cursor-ew-resize",
-                                  t.category === "Completed"
-                                    ? "bg-green-500"
-                                    : t.category === "Review"
-                                    ? "bg-purple-500"
-                                    : t.category === "In Progress"
-                                    ? "bg-yellow-500"
-                                    : "bg-blue-500"
-                                )}
-                                role="slider"
-                                aria-valuenow={t.dailyHours}
-                                aria-label="Resize start"
+                                onPointerDown={startResize(task.id, "left")}
+                                className="absolute left-0 top-0 h-full w-2 bg-blue-600 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity"
                               />
                             )}
                             {isEnd && (
                               <div
-                                onPointerDown={startResize(t.id, "right")}
-                                className={cn(
-                                  "absolute right-0 top-0 h-full w-1 bg-primary/70 cursor-ew-resize",
-                                  t.category === "Completed"
-                                    ? "bg-green-500"
-                                    : t.category === "Review"
-                                    ? "bg-purple-500"
-                                    : t.category === "In Progress"
-                                    ? "bg-yellow-500"
-                                    : "bg-blue-500"
-                                )}
-                                role="slider"
-                                aria-valuenow={t.dailyHours}
-                                aria-label="Resize end"
+                                onPointerDown={startResize(task.id, "right")}
+                                className="absolute right-0 top-0 h-full w-2 bg-blue-600 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity"
                               />
                             )}
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
