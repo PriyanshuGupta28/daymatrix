@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 export default function Demo() {
   return (
     <>
-      <section className="container py-6 mx-auto">
+      <section className="container py-6 mx-auto px-5">
         <MonthPlanner />
       </section>
       <div className="mt-10 border-t py-5">
