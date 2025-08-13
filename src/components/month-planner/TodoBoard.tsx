@@ -16,8 +16,6 @@ export interface TaskItem {
   dailyHours: number;
 }
 
-const LOCAL_STORAGE_KEY = "monthTaskPlannerTasks";
-
 type todoprops = {
   tasks: TaskItem[];
   setTasks: (tasks: TaskItem[]) => void;
@@ -31,12 +29,37 @@ export default function TodoBoard({ tasks, setTasks }: todoprops) {
     "Completed",
   ];
 
-  const handleDropTask = (taskId: string, newCategory: TaskCategory) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId ? { ...task, category: newCategory } : task
-      )
-    );
+  const handleDropTask = (
+    taskId: string,
+    newCategory: TaskCategory,
+    targetIndex: number
+  ) => {
+    setTasks((prev: TaskItem[]) => {
+      // Find the task being moved
+      const taskToMove = prev.find((task) => task.id === taskId);
+      if (!taskToMove) return prev;
+
+      // Filter out the moving task from the original array
+      const filteredTasks = prev.filter((task) => task.id !== taskId);
+
+      // Find all tasks in the target category
+      const targetCategoryTasks = filteredTasks.filter(
+        (task) => task.category === newCategory
+      );
+
+      // Insert the task at the correct position
+      const before = targetCategoryTasks.slice(0, targetIndex);
+      const after = targetCategoryTasks.slice(targetIndex);
+
+      const newTasks = [
+        ...filteredTasks.filter((task) => task.category !== newCategory),
+        ...before,
+        { ...taskToMove, category: newCategory },
+        ...after,
+      ];
+
+      return newTasks;
+    });
   };
 
   return (
