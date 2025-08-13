@@ -119,7 +119,7 @@ export default function MonthPlanner() {
   const isDraggingCreate = dragStartIdx !== null && dragEndIdx !== null;
 
   const filteredTasks = useMemo(() => {
-    const term = filters.search.trim().toLowerCase();
+    const term = filters.search.trim().toLowerCase()[0];
     const endLimit = filters.timeWindowWeeks
       ? addDays(new Date(), filters.timeWindowWeeks * 7)
       : null;
@@ -450,7 +450,7 @@ export default function MonthPlanner() {
     const globalLanes: TaskItem[][] = [];
     const taskLaneMap = new Map();
 
-    sortedTasks.forEach((task) => {
+    filteredTasks.forEach((task) => {
       const taskStart = parseISO(task.start);
       const taskEnd = parseISO(task.end);
 
@@ -464,7 +464,12 @@ export default function MonthPlanner() {
           const existingEnd = parseISO(existing.end);
 
           // Check for overlap
-          return !(taskEnd <= existingStart || taskStart >= existingEnd);
+          return !(
+            taskEnd < existingStart ||
+            taskStart > existingEnd ||
+            (taskEnd.getTime() === taskStart.getTime() &&
+              existingEnd.getTime() === existingStart.getTime())
+          );
         });
 
         if (canUseLane) {
@@ -592,7 +597,7 @@ export default function MonthPlanner() {
                     d.inCurrentMonth ? "bg-white" : "bg-gray-100",
                     isIdxInSelection(idx) ? "ring-2 ring-blue-500" : "",
                     isToday(d.date) && "bg-blue-50",
-                    "hover:bg-blue-50 transition-colors"
+                    "hover:bg-blue-50 transition-colors max-h-full"
                   )}
                   style={{ minHeight: `${minHeight}px` }}
                 >
