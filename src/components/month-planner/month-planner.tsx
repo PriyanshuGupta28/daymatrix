@@ -447,7 +447,7 @@ export default function MonthPlanner() {
     });
 
     // Global lanes for consistent positioning
-    const globalLanes = [];
+    const globalLanes: TaskItem[][] = [];
     const taskLaneMap = new Map();
 
     sortedTasks.forEach((task) => {
@@ -489,7 +489,7 @@ export default function MonthPlanner() {
 
   // Group tasks by day
   const tasksByDay = useMemo(() => {
-    const grouped = {};
+    const grouped: { [key: string]: TaskItem[] } = {};
 
     filteredTasks.forEach((task) => {
       const taskStart = parseISO(task.start);
@@ -510,7 +510,7 @@ export default function MonthPlanner() {
 
     return grouped;
   }, [filteredTasks, days]);
-  const getTaskColor = (category) => {
+  const getTaskColor = (category: TaskCategory) => {
     switch (category) {
       case "Completed":
         return "bg-green-500/50 border-green-500";
@@ -518,8 +518,6 @@ export default function MonthPlanner() {
         return "bg-purple-500/50 border-purple-500";
       case "In Progress":
         return "bg-yellow-500/50 border-purple-500";
-      case "Test":
-        return "bg-green-500/50 border-green-500";
       default:
         return "bg-blue-500/50 border-blue-500";
     }
