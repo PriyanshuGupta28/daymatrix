@@ -1,3 +1,5 @@
+@import url("react-big-calendar/lib/css/react-big-calendar.css");
+@import url("react-big-calendar/lib/addons/dragAndDrop/styles.css");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -41,6 +43,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --hour-height: 3px; /* Adjust based on your needs */
 }
 
 :root {
