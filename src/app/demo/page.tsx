@@ -1,6 +1,7 @@
 import CalendarView from "@/components/full-calendar/calendar-view";
 import MonthPlanner from "@/components/month-planner/month-planner";
 import { Metadata } from "next";
+
 export const metadata: Metadata = {
   title: "Demo | Daymatrix",
 };
