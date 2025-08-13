@@ -2,10 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
-  addMinutes,
   differenceInDays,
-  differenceInMinutes,
-  endOfDay,
   format,
   isAfter,
   isBefore,
@@ -13,7 +10,6 @@ import {
   isToday,
   isWithinInterval,
   parseISO,
-  startOfDay,
 } from "date-fns";
 import {
   buildMonthGrid,
@@ -48,7 +44,7 @@ import TodoBoard from "./TodoBoard";
 
 interface FiltersState {
   categories: Set<TaskCategory>;
-  timeWindowWeeks: 0 | 1 | 2 | 3; // 0 = all
+  timeWindowWeeks: 0 | 1 | 2 | 3;
   search: string;
 }
 
